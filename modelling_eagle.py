@@ -193,7 +193,9 @@ class EagleModel(EaglePreTrainedModel):
                                           device=vision_sequence_output.device)
 
         query_tokens = self.query_tokens.expand(vision_sequence_output.shape[0], -1, -1)
-
+        
+        print(query_tokens.shape)
+        
         connector_outputs = self.connector_model(
             query_tokens=query_tokens,
             attention_mask=image_attention_mask,
