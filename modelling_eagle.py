@@ -194,7 +194,7 @@ class EagleModel(EaglePreTrainedModel):
         
         query_tokens = self.query_tokens.expand(vision_sequence_output.shape[0], -1, -1)
         
-        batch_size = query_tokens[0]
+        batch_size = query_tokens.shape[0]
         
         query_tokens = query_tokens.squeeze(batch_size)
         
@@ -319,7 +319,7 @@ class EagleModelForCausalLM(EaglePreTrainedModel):
 
         query_tokens = self.query_tokens.expand(vision_sequence_output.shape[0], -1, -1)
         
-        batch_size = query_tokens[0]
+        batch_size = query_tokens.shape[0]
         
         query_tokens = query_tokens.squeeze(batch_size)
 
