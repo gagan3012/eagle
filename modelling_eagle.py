@@ -158,6 +158,8 @@ class EagleModel(EaglePreTrainedModel):
 
         self.connector_config =  AutoConfig.from_pretrained(config.connector_model_name_or_path)
 
+        self.query_tokens = nn.Parameter(torch.zeros(1, config.num_query_tokens, self.connector_config.hidden_size))
+
         self.language_model = GPTNeoForCausalLM.from_pretrained(config.language_model_name_or_path)
 
         self.connector_to_lm = nn.Linear(self.connector_config.hidden_size,
@@ -273,6 +275,8 @@ class EagleModelForCausalLM(EaglePreTrainedModel):
 
         self.connector_config = AutoConfig.from_pretrained(
             config.connector_model_name_or_path)
+
+        self.query_tokens = nn.Parameter(torch.zeros(1, config.num_query_tokens, self.connector_config.hidden_size))
 
         self.language_model = GPTNeoForCausalLM.from_pretrained(
             config.language_model_name_or_path)
