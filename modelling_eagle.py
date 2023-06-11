@@ -7,7 +7,7 @@ from torch.nn import CrossEntropyLoss
 from transformers import AutoConfig, AutoModelForCausalLM, \
     PreTrainedModel, Swinv2Model, AutoModel, GPTNeoForCausalLM
 
-from configuration_eagle import EagleConfig
+from .configuration_eagle import EagleConfig
 
 from transformers.modeling_outputs import BaseModelOutputWithPast, BaseModelOutputWithPoolingAndCrossAttentions, ModelOutput
 
