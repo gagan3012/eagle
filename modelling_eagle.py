@@ -191,8 +191,12 @@ class EagleModel(EaglePreTrainedModel):
 
         image_attention_mask = torch.ones(vision_sequence_output.size()[:-1], dtype=torch.long, 
                                           device=vision_sequence_output.device)
-
+        
         query_tokens = self.query_tokens.expand(vision_sequence_output.shape[0], -1, -1)
+        
+        batch_size = query_token[0]
+        
+        query_tokens = query_tokens.squeeze(batch_size)
         
         print(query_tokens.shape)
         
@@ -314,6 +318,10 @@ class EagleModelForCausalLM(EaglePreTrainedModel):
                                           device=vision_sequence_output.device)
 
         query_tokens = self.query_tokens.expand(vision_sequence_output.shape[0], -1, -1)
+        
+        batch_size = query_token[0]
+        
+        query_tokens = query_tokens.squeeze(batch_size)
 
         connector_outputs = self.connector_model(
             query_tokens=query_tokens,
