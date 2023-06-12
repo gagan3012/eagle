@@ -98,8 +98,8 @@ class EagleConnectorModel(EaglePreTrainedModel):
         self.connector_config.cross_attention_freq = config.cross_attention_freq
         self.connector_config.query_length = config.query_length
 
-        self.layernorm = nn.LayerNorm(config.hidden_size, eps=config.layer_norm_eps)
-        self.dropout = nn.Dropout(config.hidden_dropout_prob)
+        self.layernorm = nn.LayerNorm(self.connector_config.hidden_size, eps=self.connector_config.layer_norm_eps)
+        self.dropout = nn.Dropout(self.connector_config.hidden_dropout_prob)
 
         self.connector_model = AutoModel.from_pretrained(config.connector_model_name_or_path, config=self.connector_config)
 
