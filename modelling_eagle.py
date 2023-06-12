@@ -227,7 +227,7 @@ class EagleConnectorModel(EaglePreTrainedModel):
         # and head_mask is converted to shape [num_hidden_layers x batch x num_heads x seq_length x seq_length]
         head_mask = self.get_head_mask(head_mask, self.connector_config.num_hidden_layers)
 
-        encoder_outputs = self.connector_model(
+        encoder_outputs = self.connector_model.encoder(
             embedding_output,
             attention_mask=attention_mask,
             head_mask=head_mask,
