@@ -191,7 +191,7 @@ class EagleConnectorModel(EaglePreTrainedModel):
         device = embedding_output.device
 
         if attention_mask is None:
-            attention_mask = torch.ones(((batch_size, seq_length)), device=device)
+            attention_mask = torch.ones(((batch_size, seq_length + past_key_values_length)), device=device)
 
         # We can provide a self-attention mask of dimensions [batch_size, from_seq_length, to_seq_length]
         # ourselves in which case we just need to make it broadcastable to all heads.
@@ -226,6 +226,8 @@ class EagleConnectorModel(EaglePreTrainedModel):
         # input head_mask has shape [num_heads] or [num_hidden_layers x num_heads]
         # and head_mask is converted to shape [num_hidden_layers x batch x num_heads x seq_length x seq_length]
         head_mask = self.get_head_mask(head_mask, self.connector_config.num_hidden_layers)
+
+        print(attention_mask.shape)
 
         encoder_outputs = self.connector_model.encoder(
             embedding_output,
