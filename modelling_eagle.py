@@ -181,9 +181,9 @@ class EagleConnectorModel(EaglePreTrainedModel):
             past_key_values[0][0].shape[2] - self.config.query_length if past_key_values is not None else 0
         )
 
-        query_length = query_embeds.shape[1] if query_embeds is not None else 0
+        query_length = query_tokens.shape[1] if query_tokens is not None else 0
 
-        embedding_output = self.layernorm(query_embeds)
+        embedding_output = self.layernorm(query_tokens)
         embedding_output = self.dropout(embedding_output)
 
         input_shape = embedding_output.size()[:-1]
