@@ -98,9 +98,71 @@ class EagleConnectorModel(EaglePreTrainedModel):
         self.connector_config.cross_attention_freq = config.cross_attention_freq
         self.connector_config.query_length = config.query_length
 
+        self.layernorm = nn.LayerNorm(config.hidden_size, eps=config.layer_norm_eps)
+        self.dropout = nn.Dropout(config.hidden_dropout_prob)
+
         self.connector_model = AutoModel.from_pretrained(config.connector_model_name_or_path, config=self.connector_config)
 
         query_tokens = nn.Parameter(torch.zeros(1, config.query_length, config.vision_hidden_size))
+
+    def get_input_embeddings(self):
+        return self.embeddings.word_embeddings
+
+    def set_input_embeddings(self, value):
+        self.embeddings.word_embeddings = value
+
+    def _prune_heads(self, heads_to_prune):
+        """
+        Prunes heads of the model. heads_to_prune: dict of {layer_num: list of heads to prune in this layer} See base
+        class PreTrainedModel
+        """
+        for layer, heads in heads_to_prune.items():
+            self.encoder.layer[layer].attention.prune_heads(heads)
+
+    def get_extended_attention_mask(
+        self,
+        attention_mask: torch.Tensor,
+        input_shape: Tuple[int],
+        device: torch.device,
+        has_query: bool = False,
+    ) -> torch.Tensor:
+        """
+        Makes broadcastable attention and causal masks so that future and masked tokens are ignored.
+
+        Arguments:
+            attention_mask (`torch.Tensor`):
+                Mask with ones indicating tokens to attend to, zeros for tokens to ignore.
+            input_shape (`Tuple[int]`):
+                The shape of the input to the model.
+            device (`torch.device`):
+                The device of the input to the model.
+
+        Returns:
+            `torch.Tensor` The extended attention mask, with a the same dtype as `attention_mask.dtype`.
+        """
+        # We can provide a self-attention mask of dimensions [batch_size, from_seq_length, to_seq_length]
+        # ourselves in which case we just need to make it broadcastable to all heads.
+        if attention_mask.dim() == 3:
+            extended_attention_mask = attention_mask[:, None, :, :]
+        elif attention_mask.dim() == 2:
+            # Provided a padding mask of dimensions [batch_size, seq_length]
+            # - the model is an encoder, so make the mask broadcastable to [batch_size, num_heads, seq_length, seq_length]
+            extended_attention_mask = attention_mask[:, None, None, :]
+        else:
+            raise ValueError(
+                "Wrong shape for input_ids (shape {}) or attention_mask (shape {})".format(
+                    input_shape, attention_mask.shape
+                )
+            )
+
+        # Since attention_mask is 1.0 for positions we want to attend and 0.0 for
+        # masked positions, this operation will create a tensor which is 0.0 for
+        # positions we want to attend and -10000.0 for masked positions.
+        # Since we are adding it to the raw scores before the softmax, this is
+        # effectively the same as removing these entirely.
+        extended_attention_mask = extended_attention_mask.to(dtype=self.dtype)  # fp16 compatibility
+        extended_attention_mask = (1.0 - extended_attention_mask) * -10000.0
+        return extended_attention_mask
 
     def forward(
         self,
@@ -115,9 +177,58 @@ class EagleConnectorModel(EaglePreTrainedModel):
         output_hidden_states=None,
         return_dict=None,
     ):
-        
+        past_key_values_length = (
+            past_key_values[0][0].shape[2] - self.config.query_length if past_key_values is not None else 0
+        )
+
+        query_length = query_embeds.shape[1] if query_embeds is not None else 0
+
+        embedding_output = self.layernorm(query_embeds)
+        embedding_output = self.dropout(embedding_output)
+
+        input_shape = embedding_output.size()[:-1]
+        batch_size, seq_length = input_shape
+        device = embedding_output.device
+
+        if attention_mask is None:
+            attention_mask = torch.ones(((batch_size, seq_length + past_key_values_length)), device=device)
+
+        # We can provide a self-attention mask of dimensions [batch_size, from_seq_length, to_seq_length]
+        # ourselves in which case we just need to make it broadcastable to all heads.
+        extended_attention_mask = self.get_extended_attention_mask(attention_mask, input_shape, device)
+
+        # If a 2D or 3D attention mask is provided for the cross-attention
+        # we need to make broadcastable to [batch_size, num_heads, seq_length, seq_length]
+        if encoder_hidden_states is not None:
+            if type(encoder_hidden_states) == list:
+                encoder_batch_size, encoder_sequence_length, _ = encoder_hidden_states[0].size()
+            else:
+                (
+                    encoder_batch_size,
+                    encoder_sequence_length,
+                    _,
+                ) = encoder_hidden_states.size()
+            encoder_hidden_shape = (encoder_batch_size, encoder_sequence_length)
+
+            if type(encoder_attention_mask) == list:
+                encoder_extended_attention_mask = [self.invert_attention_mask(mask) for mask in encoder_attention_mask]
+            elif encoder_attention_mask is None:
+                encoder_attention_mask = torch.ones(encoder_hidden_shape, device=device)
+                encoder_extended_attention_mask = self.invert_attention_mask(encoder_attention_mask)
+            else:
+                encoder_extended_attention_mask = self.invert_attention_mask(encoder_attention_mask)
+        else:
+            encoder_extended_attention_mask = None
+
+        # Prepare head mask if needed
+        # 1.0 in head_mask indicate we keep the head
+        # attention_probs has shape bsz x n_heads x N x N
+        # input head_mask has shape [num_heads] or [num_hidden_layers x num_heads]
+        # and head_mask is converted to shape [num_hidden_layers x batch x num_heads x seq_length x seq_length]
+        head_mask = self.get_head_mask(head_mask, self.config.num_hidden_layers)
+
         encoder_outputs = self.connector_model(
-            query_tokens,
+            embedding_output,
             attention_mask=attention_mask,
             head_mask=head_mask,
             encoder_hidden_states=encoder_hidden_states,
